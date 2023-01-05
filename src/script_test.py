@@ -1,44 +1,108 @@
-import cupy as cp
+import numpy as np
+import pandas as pd
 import torch
-import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+from pytorch_transformers import BertTokenizer, BertForSequenceClassification, BertConfig
+from torch.optim import Adam
 import torch.nn.functional as F
-from cupyx.profiler import benchmark
 
-# # cupy test
-# def my_func(a):
-#     return cp.sqrt(cp.sum(a**2, axis=-1))
-# a = cp.random.random((10240, 10240))
-# print(benchmark(my_func, (a,), n_repeat=20))
+train_df.dropna(inplace=True)
+test_df.dropna(inplace=True)
 
-
-# parameters test
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        # 입력 이미지 채널 1개, 출력 채널 6개, 5x5의 정사각 컨볼루션 행렬
-        # 컨볼루션 커널 정의
-        self.conv1 = nn.Conv2d(1, 6, 5)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        # 아핀(affine) 연산: y = Wx + b
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)  # 5*5은 이미지 차원에 해당
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
-
-    def forward(self, x):
-        # (2, 2) 크기 윈도우에 대해 맥스 풀링(max pooling)
-        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-        # 크기가 제곱수라면, 하나의 숫자만을 특정(specify)
-        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
-        x = torch.flatten(x, 1)  # 배치 차원을 제외한 모든 차원을 하나로 평탄화(flatten)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+train_df = train_df.sample(frac=0.4, random_state=999)
+test_df = test_df.sample(frac=0.4, random_state=999)
 
 
-net = Net()
-print(net)
+class NsmcDataset(Dataset):
+    ''' Naver Sentiment Movie Corpus Dataset '''
+    def __init__(self, df):
+        self.df = df
 
-params = list(net.parameters())
-print(len(params))
-print(params[0].size())  # conv1의 .weight
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        text = self.df.iloc[idx, 1]
+        label = self.df.iloc[idx, 2]
+        return text, label
+    
+    
+    
+nsmc_train_dataset = NsmcDataset(train_df)
+train_loader = DataLoader(nsmc_train_dataset, batch_size=2, shuffle=True, num_workers=2)
+
+device = torch.device("cuda")
+tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+model = BertForSequenceClassification.from_pretrained('bert-base-multilingual-cased')
+model.to(device)
+
+
+
+
+optimizer = Adam(model.parameters(), lr=1e-6)
+
+itr = 1
+p_itr = 500
+epochs = 1
+total_loss = 0
+total_len = 0
+total_correct = 0
+
+
+model.train()
+for epoch in range(epochs):
+    
+    for text, label in train_loader:
+        optimizer.zero_grad()
+
+        encoded_list = [tokenizer.encode(t, add_special_tokens=True) for t in text]
+        padded_list =  [e + [0] * (512-len(e)) for e in encoded_list]
+        sample = torch.tensor(padded_list)
+        sample, label = sample.to(device), label.to(device)
+        labels = torch.tensor(label)
+        outputs = model(sample, labels=labels)
+        loss, logits = outputs
+
+        pred = torch.argmax(F.softmax(logits), dim=1)
+        correct = pred.eq(labels)
+        total_correct += correct.sum().item()
+        total_len += len(labels)
+        total_loss += loss.item()
+        loss.backward()
+        optimizer.step()
+        
+        if itr % p_itr == 0:
+            print('[Epoch {}/{}] Iteration {} -> Train Loss: {:.4f}, Accuracy: {:.3f}'.format(epoch+1, epochs, itr, total_loss/p_itr, total_correct/total_len))
+            total_loss = 0
+            total_len = 0
+            total_correct = 0
+
+        itr+=1
+
+        
+model.eval()
+
+nsmc_eval_dataset = NsmcDataset(test_df)
+eval_loader = DataLoader(nsmc_eval_dataset, batch_size=2, shuffle=False, num_workers=2)
+
+total_loss = 0
+total_len = 0
+total_correct = 0
+
+for text, label in eval_loader:
+    encoded_list = [tokenizer.encode(t, add_special_tokens=True) for t in text]
+    padded_list =  [e + [0] * (512-len(e)) for e in encoded_list]
+    sample = torch.tensor(padded_list)
+    sample, label = sample.to(device), label.to(device)
+    labels = torch.tensor(label)
+    outputs = model(sample, labels=labels)
+    _, logits = outputs
+
+    pred = torch.argmax(F.softmax(logits), dim=1)
+    correct = pred.eq(labels)
+    total_correct += correct.sum().item()
+    total_len += len(labels)
+
+print('Test accuracy: ', total_correct / total_len)
+        
+        
