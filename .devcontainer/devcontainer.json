@@ -1,7 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.245.0/containers/docker-existing-dockerfile
 {
-	"name": "BertSentimentTestContainerContainer",
+	"name": "BertSentimentTest",
 
 	// Sets the run context to one level up instead of the .devcontainer folder.
 	"context": "..",
@@ -20,9 +20,9 @@
 		"-v",
 		"/etc/group:/etc/group:ro",
 		"-v",
-		"${localEnv:DATAHOME}/BertSentimentTestContainerContainer/external_storage:/workspaces/BertSentimentTestContainerContainer/src/external_storage",
+		"${localEnv:DATAHOME}/BertSentimentTest:/workspaces/BertSentimentTest/src/external_storage"
 	],
-	"remoteEnv": {"PYTHONPATH": "${containerEnv:PATH}:/workspaces/BertSentimentTestContainerContainer/src"},
+	"remoteEnv": {"PYTHONPATH": "${containerEnv:PATH}:/workspaces/BertSentimentTest/src"},
 	
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [8888, 8787, 8786],
