@@ -96,7 +96,6 @@ for epoch in range(epochs):
 
 
 model.eval()
-
 nsmc_eval_dataset = NsmcDataset(test_df)
 eval_loader = DataLoader(nsmc_eval_dataset, batch_size=2, shuffle=False, num_workers=2)
 
