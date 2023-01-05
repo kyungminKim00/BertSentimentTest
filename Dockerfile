@@ -1,6 +1,7 @@
 FROM nvcr.io/nvidia/rapidsai/rapidsai-core:22.10-cuda11.5-base-ubuntu20.04-py3.9
 
 ENV USER=kmkim
+ENV HOME=/home/$USER
 ENV PATH="$HOME/.local/bin:$PATH"
 ENV DEBIAN_FRONTEND noninteractive
 ENV TZ=Asia/Seoul
